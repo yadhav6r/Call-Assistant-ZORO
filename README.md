@@ -4,11 +4,11 @@ ZORO is an Android-first personal AI communication assistant. The Android app is
 
 ## Project status
 
-Phase 0 discovery is documented in [docs/PHASE_0_DISCOVERY.md](docs/PHASE_0_DISCOVERY.md). Phases 1–3 are implemented; PostgreSQL/Redis are healthy locally, migrations are applied through head, and the API health/readiness checks pass. Phase 2 includes development-only owner APIs, Android sign-in/dashboard, availability and contacts. Phase 3 adds a text-only mock conversation screen and owner-scoped event persistence; no calls or live AI are used. End-to-end app walkthrough remains. App setup is documented in [android/README.md](android/README.md); phase notes are in `docs/`.
+Phases 0–3 are implemented for local development. The API, owner control panel, and text-only call simulation work locally; the project has no real phone call handling or live AI yet. See [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) for progress and [docs/DEPLOYMENT_PLAN.md](docs/DEPLOYMENT_PLAN.md) for the proposed live setup and its remaining requirements.
 
 ## Development direction
 
-Use mock telephony while building and exercising the conversation pipeline. Real provider and number selection is deferred; India is the region to research when that choice is resumed. The first real-call route should use a dedicated programmable number after provider feasibility is confirmed.
+Use mock telephony while building and exercising the conversation pipeline. The first live candidate is Exotel inbound Voicebot/AgentStream with a dedicated programmable number in India; the owner selected English and Kannada. Provider eligibility, KYC and streaming price are not confirmed. See the deployment plan before configuring a real account.
 
 ## Backend setup
 
@@ -18,7 +18,7 @@ From `backend/`: create a virtual environment, install `python -m pip install -e
 
 Open `android/` in Android Studio with JDK 17 or newer. The default debug URL points to the backend on the Android emulator (`10.0.2.2:8000`). For details, including physical-device URL overrides and release HTTPS requirements, see [android/README.md](android/README.md).
 
-The backend currently refuses non-development configuration because email verification and production secret handling are not implemented. Do not expose this scaffold as a production service.
+The backend currently refuses non-development configuration because production authentication and secret handling are not implemented. A Cloud Run container recipe is provided for deployment preparation only. Do not expose this scaffold as a production service.
 
 ## Product guardrails
 

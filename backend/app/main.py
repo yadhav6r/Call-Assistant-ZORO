@@ -12,6 +12,7 @@ from app.api import (
     contacts_router,
     profile_router,
     simulated_calls_router,
+    exotel_router,
 )
 from app.config import get_settings
 from app.database import create_database_engine, create_session_factory
@@ -39,6 +40,7 @@ app.include_router(profile_router)
 app.include_router(availability_router)
 app.include_router(contacts_router)
 app.include_router(simulated_calls_router)
+app.include_router(exotel_router)
 
 
 @app.get("/health", tags=["operations"])

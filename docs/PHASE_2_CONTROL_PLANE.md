@@ -4,7 +4,7 @@
 
 ## Backend endpoints
 
-- `POST /api/v1/auth/register` — development-only account creation with Argon2 password hashing.
+- `POST /api/v1/auth/register` — development-only account creation with Argon2 password hashing. Production rejects public registration.
 - `POST /api/v1/auth/login` — short-lived signed access token plus opaque refresh token.
 - `POST /api/v1/auth/refresh` — rotates refresh token and issues a new access token.
 - `POST /api/v1/auth/logout` — revokes the active session; authenticated requests check revocation.
@@ -21,7 +21,8 @@ Native Kotlin/Compose shell with create-account/sign-in, encrypted token storage
 - Passwords are Argon2-hashed; refresh tokens are stored only as SHA-256 digests and rotate on use.
 - Access tokens expire and are checked against a non-revoked, unexpired server session on each protected request.
 - Every profile, mode, and contact query is scoped to the authenticated owner.
-- Backend configuration currently must be `development`: it refuses non-development configuration until email verification and production secret handling are implemented. Registration currently does not verify email.
+- Production mode is limited to one pre-provisioned owner email. `python -m app.bootstrap_owner` creates the owner only when the database is empty; public registration remains disabled. Production startup requires a strong JWT secret, a PostgreSQL URL, and `ZORO_OWNER_EMAIL`. Database-backed login throttling uses hashed email/IP identifiers. The bootstrap job can reset the owner's password and revoke sessions only when `ZORO_BOOTSTRAP_RESET=true` is explicitly set.
+- Owner auth, login throttling, bootstrap and account recovery have not yet been validated against a production database. There is no email verification or password reset email flow; the app is configured for single-owner personal use, not public signup.
 - Android debug allows cleartext for local emulator development; release configuration rejects cleartext and must use HTTPS.
 - Rate limiting, account recovery, verified email, device/session management UI, audit events, push token registration, and call history are not implemented in this slice.
 - Contact handling rules are stored as owner data only; they are not yet interpreted by a call agent.

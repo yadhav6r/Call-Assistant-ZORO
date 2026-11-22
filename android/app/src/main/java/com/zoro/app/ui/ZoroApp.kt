@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.zoro.app.BuildConfig
 import com.zoro.app.data.Contact
 
 private val modes = listOf(
@@ -57,6 +58,7 @@ fun ZoroApp(viewModel: ZoroViewModel) {
                 SignInScreen(
                     loading = state.loading,
                     error = state.error,
+                    allowAccountCreation = BuildConfig.DEBUG,
                     onSignIn = viewModel::signIn,
                     onCreateAccount = viewModel::createAccount,
                 )
@@ -82,6 +84,7 @@ fun ZoroApp(viewModel: ZoroViewModel) {
 private fun SignInScreen(
     loading: Boolean,
     error: String?,
+    allowAccountCreation: Boolean,
     onSignIn: (String, String) -> Unit,
     onCreateAccount: (String, String) -> Unit,
 ) {
@@ -131,12 +134,18 @@ private fun SignInScreen(
             if (loading) CircularProgressIndicator()
             else Text(if (creatingAccount) "Create account" else "Sign in")
         }
-        TextButton(onClick = { creatingAccount = !creatingAccount }, enabled = !loading) {
-            Text(if (creatingAccount) "Already have an account? Sign in" else "Create an account")
+        if (allowAccountCreation) {
+            TextButton(onClick = { creatingAccount = !creatingAccount }, enabled = !loading) {
+                Text(if (creatingAccount) "Already have an account? Sign in" else "Create an account")
+            }
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            "Development sign-in only. Use at least 12 characters for a new password.",
+            if (allowAccountCreation) {
+                "Development sign-in only. Use at least 12 characters for a new password."
+            } else {
+                "Sign in with your private owner account. Account creation is disabled in this release."
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -29,11 +29,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await engine.dispose()
 
 
+settings = get_settings()
+production = settings.app_env.lower() == "production"
+
 app = FastAPI(
     title="ZORO API",
     version="0.2.0",
     description="Owner control plane and webhook API for ZORO.",
     lifespan=lifespan,
+    docs_url=None if production else "/docs",
+    redoc_url=None if production else "/redoc",
+    openapi_url=None if production else "/openapi.json",
 )
 app.include_router(auth_router)
 app.include_router(profile_router)

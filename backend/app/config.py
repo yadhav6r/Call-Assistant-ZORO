@@ -2,7 +2,7 @@ from datetime import timedelta
 from functools import lru_cache
 from typing import Self
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import EmailStr, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     jwt_secret_key: SecretStr = SecretStr("development-only-change-before-use")
     jwt_access_ttl_minutes: int = Field(default=15, ge=5, le=60)
     refresh_ttl_days: int = Field(default=30, ge=1, le=90)
+    owner_email: EmailStr | None = None
     live_calls_enabled: bool = False
     exotel_stream_username: SecretStr | None = None
     exotel_stream_password: SecretStr | None = None
@@ -40,15 +41,32 @@ class Settings(BaseSettings):
                 "Live calls require Exotel stream credentials and an AI API key; "
                 "store them as secrets and keep live calls disabled until the provider flow is ready."
             )
+        if self.live_calls_enabled and self.app_env.lower() != "production":
+            raise ValueError("Live calls can only be enabled in production mode.")
         return self
 
     @model_validator(mode="after")
-    def require_development_only_auth_until_verification_exists(self) -> Self:
-        if self.app_env.lower() != "development":
-            raise ValueError(
-                "Authentication is development-only until email verification and production "
-                "secret configuration are implemented."
-            )
+    def validate_environment_secrets(self) -> Self:
+        if self.app_env.lower() not in {"development", "production"}:
+            raise ValueError("ZORO_APP_ENV must be development or production.")
+        if self.app_env.lower() == "production":
+            jwt_secret = self.jwt_secret_key.get_secret_value()
+            database_url = self.database_url.get_secret_value()
+            if (
+                len(jwt_secret) < 32
+                or jwt_secret == "development-only-change-before-use"
+                or jwt_secret.lower().startswith("replace")
+            ):
+                raise ValueError("Production requires a randomly generated JWT secret of at least 32 characters.")
+            if (
+                not database_url.startswith("postgresql+asyncpg://")
+                or "localhost" in database_url
+                or "zoro:zoro@" in database_url
+                or "replace" in database_url.lower()
+            ):
+                raise ValueError("Production requires a configured PostgreSQL database URL.")
+            if self.owner_email is None:
+                raise ValueError("Production requires ZORO_OWNER_EMAIL for the single owner account.")
         return self
 
 

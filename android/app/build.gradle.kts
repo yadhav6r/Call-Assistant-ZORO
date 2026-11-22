@@ -10,12 +10,12 @@ val apiBaseUrl = providers.gradleProperty("ZORO_API_BASE_URL")
 
 android {
     namespace = "com.zoro.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.zoro.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
         buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")

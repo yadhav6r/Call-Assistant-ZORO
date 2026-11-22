@@ -2,7 +2,7 @@
 
 ## Current state
 
-ZORO is not live yet. The Android app is an owner control panel; its conversation screen is a text simulation. A first Exotel-to-Realtime audio relay is implemented, but it is off by default and has not been tested with Exotel or a real call. The backend supports local development only and deliberately rejects production configuration. No telephony or AI provider is connected, no production database exists, and no cloud deployment has been made.
+ZORO is not live yet. The Android app is an owner control panel; its conversation screen is a text simulation. A first Exotel-to-Realtime audio relay and private single-owner production authentication are implemented, but neither has been tested against production services. The backend can be configured for production once its database and secrets are provisioned. No telephony or AI provider is connected, no production database exists, and no cloud deployment has been made.
 
 ## Recommended first live architecture
 
@@ -21,14 +21,14 @@ Render's free web service sleeps after 15 minutes without traffic and can take a
 
 ## Required work before a real caller can be connected
 
-1. Replace development-only account setup with production authentication, verified owner access, request throttling, and a recovery path. Keep registration closed until this is done.
+1. Configure the private single-owner production authentication: set `ZORO_OWNER_EMAIL`, create strong database and JWT secrets, run migrations, and execute the one-time owner provisioning job with a temporary 20+ character password from Secret Manager. Then remove the bootstrap secret. Public registration is disabled in production; login attempts are limited by hashed email/IP buckets in PostgreSQL. Test owner sign-in, refresh, logout, rate limiting, and the documented password reset procedure before enabling calls.
 2. Validate the Exotel WebSocket auth and media protocol in its sandbox; the current relay handles the live media stream but does not yet create durable call lifecycle records or post-call summaries. Add those, idempotency, and a provider-approved safe fallback before real callers use it.
 3. Validate the real-time voice adapter against Exotel's sandbox. It expects Exotel raw PCM16 mono at 24 kHz and relays it to OpenAI Realtime with no sample-rate conversion. The default call limit is five minutes. Test English/Kannada speech recognition, voice quality, interruptions, packet pacing, timeouts and cost with the owner. If Exotel only provisions 8 kHz/16 kHz audio for the chosen account, add and validate resampling before enabling it.
 4. Configure the Exotel call flow to disclose that the caller is speaking to an AI and obtain any required consent before the voice stream reaches an external AI service. Keep recording off.
 5. Add policy controls so the agent cannot make commitments, disclose private data, make payments, or contact others without owner approval.
 6. Provide a caller-facing privacy notice and define retention/deletion before retaining transcripts or summaries.
 7. Deploy the API and database to a paid, monitored cloud project; configure HTTPS/WSS, secrets, backups, budget alerts, and a rollback path.
-8. Update Android compile/target API from 35 to 36 with a compatible Android Gradle Plugin, review target-SDK behavior changes, point the release build to the deployed HTTPS API, create a signed Android App Bundle, and distribute privately through Play internal testing or a signed APK.
+8. Build Android with the updated API 36 / Gradle plugin settings, review target-SDK behavior changes, point the release build to the deployed HTTPS API, create a signed Android App Bundle, and distribute privately through Play internal testing or a signed APK.
 9. Make a controlled test call from a known number, verify the AI disclosure, English/Kannada turns, interruption/failure fallback, metadata and owner view, then enable the number for intended callers.
 
 ## External account and spending gates
@@ -37,6 +37,8 @@ The repository can be prepared without account credentials. The following steps 
 
 ## Current deployment artifact
 
-`backend/Dockerfile` packages the API as a non-root container for Cloud Run. It does not run database migrations automatically. Migrations must be executed as a reviewed, one-off release step after the production database is provisioned and before traffic is switched over. The live-call route is `/api/v1/telephony/exotel/stream?sample-rate=24000`; it requires Exotel Basic Authentication and `ZORO_LIVE_CALLS_ENABLED=true`, plus Exotel stream credentials and an AI API key. The default is `false`. Do not enable it or expose the service publicly until consent is configured in the provider flow, production authentication is complete, and the controlled call checks above pass. The application still refuses production mode.
+`backend/Dockerfile` packages the API as a non-root container for Cloud Run. It does not run database migrations automatically. Migrations must be executed as a reviewed, one-off release step after the production database is provisioned and before traffic is switched over. `python -m app.bootstrap_owner` creates the only production owner when the database is empty. To reset that owner's password, set `ZORO_BOOTSTRAP_RESET=true` for the one-off job; it revokes existing sessions. Remove the temporary bootstrap password secret after either operation.
+
+The live-call route is `/api/v1/telephony/exotel/stream?sample-rate=24000`; it requires Exotel Basic Authentication and `ZORO_LIVE_CALLS_ENABLED=true`, plus Exotel stream credentials and an AI API key. The default is `false`. Do not enable it or expose the service publicly until consent is configured in the provider flow, production authentication is configured, and the controlled call checks above pass. Deployment steps are in [backend/deploy/README.md](../backend/deploy/README.md).
 
 The relay sends call audio to the configured AI provider in real time but does not save audio or transcripts in ZORO. The provider still processes the audio; review its terms, data handling and retention before the first caller is connected. Keep Exotel recording disabled.

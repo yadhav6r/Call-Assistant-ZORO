@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -11,12 +11,23 @@ from app.dependencies import get_db
 from app.models import AuthSession, User
 from app.security import (
     AuthContext,
+    _DUMMY_PASSWORD_HASH,
     create_auth_session,
     digest_refresh_token,
     get_auth_context,
     issue_access_token,
+    login_bucket_hash,
     new_refresh_token,
     password_hash,
+)
+from app.services.auth_limits import (
+    EMAIL_FAILURE_LIMIT,
+    IP_FAILURE_LIMIT,
+    active_lock_until,
+    clear_failures,
+    prune_old_failures,
+    record_failure,
+    retry_after_seconds,
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
@@ -44,6 +55,11 @@ async def register(
     db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> TokenResponse:
+    if settings.app_env.lower() == "production":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account creation is disabled. The private owner account is provisioned separately.",
+        )
     user = User(
         email=str(body.email).lower(),
         password_hash=password_hash.hash(body.password),
@@ -67,13 +83,49 @@ async def register(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     body: Credentials,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> TokenResponse:
-    result = await db.execute(select(User).where(User.email == str(body.email).lower()))
-    user = result.scalar_one_or_none()
-    if user is None or not user.password_hash or not password_hash.verify(body.password, user.password_hash):
+    email = str(body.email).lower()
+    is_owner_email = (
+        settings.app_env.lower() != "production"
+        or settings.owner_email is not None
+        and email == str(settings.owner_email).lower()
+    )
+    bucket_hashes: list[str] = []
+    now = datetime.now(UTC)
+    if settings.app_env.lower() == "production":
+        await prune_old_failures(db, now)
+        client_ip = request.client.host if request.client else "unknown"
+        email_bucket = login_bucket_hash("email", email, settings)
+        ip_bucket = login_bucket_hash("ip", client_ip, settings)
+        bucket_hashes = [email_bucket, ip_bucket]
+        locked_until = await active_lock_until(db, bucket_hashes, now)
+        if locked_until is not None:
+            retry_after = retry_after_seconds(locked_until, now)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many sign-in attempts. Try again later.",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+    user = None
+    if is_owner_email:
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+    valid_password = password_hash.verify(
+        body.password,
+        user.password_hash if user is not None and user.password_hash else _DUMMY_PASSWORD_HASH,
+    )
+    if user is None or not valid_password:
+        if settings.app_env.lower() == "production":
+            await record_failure(db, bucket_hashes[0], EMAIL_FAILURE_LIMIT, now)
+            await record_failure(db, bucket_hashes[1], IP_FAILURE_LIMIT, now)
+            await db.commit()
         raise HTTPException(status_code=401, detail="Email or password is incorrect")
+    if settings.app_env.lower() == "production":
+        await clear_failures(db, bucket_hashes)
     auth_session, refresh_token = await create_auth_session(db, user, settings)
     await db.commit()
     return TokenResponse(
@@ -102,7 +154,10 @@ async def refresh(
     ):
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
     user = await db.get(User, auth_session.user_id)
-    if user is None:
+    if user is None or (
+        settings.app_env.lower() == "production"
+        and (settings.owner_email is None or user.email != str(settings.owner_email).lower())
+    ):
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
     next_refresh_token = new_refresh_token()
     auth_session.refresh_token_hash = digest_refresh_token(next_refresh_token)

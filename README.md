@@ -18,7 +18,7 @@ From `backend/`: create a virtual environment, install `python -m pip install -e
 
 Open `android/` in Android Studio with JDK 17 or newer. The default debug URL points to the backend on the Android emulator (`10.0.2.2:8000`). For details, including physical-device URL overrides and release HTTPS requirements, see [android/README.md](android/README.md).
 
-The backend currently refuses non-development configuration because production authentication and secret handling are not implemented. A Cloud Run container recipe is provided for deployment preparation only. Do not expose this scaffold as a production service.
+The backend supports a private, single-owner production mode with public signup disabled, an owner-provisioning job, required production secrets, and database-backed login throttling. These controls and the Exotel voice relay are implemented but not yet deployed or validated in cloud. Keep `ZORO_LIVE_CALLS_ENABLED=false` until the provider flow is configured and a controlled call succeeds.
 
 ## Product guardrails
 

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+import hmac
 from secrets import token_urlsafe
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from app.dependencies import get_db
 from app.models import AuthSession, User
 
 password_hash = PasswordHash.recommended()
+_DUMMY_PASSWORD_HASH = password_hash.hash("zoro-nonexistent-account-dummy-password")
 bearer = HTTPBearer(auto_error=False)
 
 
@@ -30,6 +32,12 @@ def new_refresh_token() -> str:
 
 def digest_refresh_token(token: str) -> str:
     return sha256(token.encode("utf-8")).hexdigest()
+
+
+def login_bucket_hash(kind: str, value: str, settings: Settings) -> str:
+    key = settings.jwt_secret_key.get_secret_value().encode("utf-8")
+    message = f"login-limit:{kind}:{value.strip().lower()}".encode("utf-8")
+    return hmac.new(key, message, sha256).hexdigest()
 
 
 def issue_access_token(user_id: UUID, session_id: UUID, settings: Settings) -> str:
@@ -100,7 +108,10 @@ async def get_auth_context(
     ):
         raise unauthorized
     user = await db.get(User, user_id)
-    if user is None:
+    if user is None or (
+        settings.app_env.lower() == "production"
+        and (settings.owner_email is None or user.email != str(settings.owner_email).lower())
+    ):
         raise unauthorized
     return AuthContext(user=user, session=auth_session)
 

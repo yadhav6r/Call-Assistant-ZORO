@@ -1,0 +1,25 @@
+# Local tools and machine-specific settings
+work/
+android/local.properties
+android/.idea/
+android/.kotlin/
+*.iml
+
+# Android/Gradle outputs
+.gradle/
+**/.gradle/
+**/build/
+**/captures/
+*.apk
+*.aab
+
+# Python environment and generated metadata
+**/.venv*/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+**/.env
+
+# Signing material
+*.jks
+*.keystore
